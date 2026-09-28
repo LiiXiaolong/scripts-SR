@@ -1,0 +1,74 @@
+global.darkServantSummonContext = global.darkServantSummonContext || {}
+
+global.darkServantSummonContextKey = function(owner, spellId) {
+  if (owner == null || spellId == null) return ''
+  let ownerUuid = ''
+  try {
+    ownerUuid = owner.uuid ? String(owner.uuid) : String(owner.getUUID())
+  } catch (e) {}
+  if (!ownerUuid) return ''
+  return `${ownerUuid}|${String(spellId)}`
+}
+
+function applyDarkServantMarkers(entity, owner) {
+  if (!entity || !owner || !global.applyOwnedEntityMarkers) return false
+  let ownerUsername = ''
+  try {
+    ownerUsername = String(owner.username || owner.getName().getString() || '')
+  } catch (e) {}
+  if (!ownerUsername) return false
+
+  return global.applyOwnedEntityMarkers(entity, owner, {
+    tags: [
+      `legion:${ownerUsername}`,
+      'Dark Servant',
+      'dark_servant',
+      'specter',
+      `conjured:${ownerUsername}`,
+      'tamed_beast'
+    ],
+    ownerTag: true,
+    persistentOwner: true,
+    summonerNbt: true,
+    registerNativeOwner: false
+  })
+}
+
+function hardenIronsSummonManagerAfterSummon() {
+  try {
+    if (global.hardenIronsSummonManagerOwnerSets) {
+      global.hardenIronsSummonManagerOwnerSets()
+    }
+  } catch (e) {}
+
+  try {
+    if (Utils.server && global.hardenIronsSummonManagerOwnerSets) {
+      Utils.server.scheduleInTicks(1, () => {
+        try { global.hardenIronsSummonManagerOwnerSets() } catch (e) {}
+      })
+    }
+  } catch (e) {}
+}
+
+ForgeEvents.onEvent('io.redspace.ironsspellbooks.api.events.SpellSummonEvent', event => {
+  hardenIronsSummonManagerAfterSummon()
+
+  let caster = event.getCaster()
+  let spellId = String(event.getSpellId())
+  let key = global.darkServantSummonContextKey(caster, spellId)
+  if (!key) return
+
+  let ctx = global.darkServantSummonContext[key]
+  if (!ctx) return
+
+  let owner = ctx.player
+  if (!owner && ctx.ownerUsername) {
+    try { owner = Utils.server.getPlayer(ctx.ownerUsername) } catch (e) {}
+  }
+  if (!owner) return
+
+  let creature = event.getCreature()
+  if (!creature) return
+
+  applyDarkServantMarkers(creature, owner)
+})
